@@ -39,13 +39,14 @@ class TripInfo:
         return self._options['waiting_time'] if 'waiting_time' in self._options else 0
 
     def __str__(self):
+        ostr = {f'''
+    Время ожидания машины: {seconds_to_time(self.waiting_time())}
+    Стоимость поездки: {self.price()}''' if self.is_available() else 'Поездка недоступна'}
         return f'''
     Длина маршрута, м: {self.travel_distance()}
     Время поездки: {seconds_to_time(self.travel_time())}
     Тариф поездки: {self.class_text()}
-    {f'''
-    Время ожидания машины: {seconds_to_time(self.waiting_time())}
-    Стоимость поездки: {self.price()}''' if self.is_available() else 'Поездка недоступна'}
+    {ostr}
     '''
 
 def parse_response(response : requests.Response) -> list[TripInfo]:

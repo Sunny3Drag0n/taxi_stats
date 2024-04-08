@@ -1,5 +1,5 @@
 import requests
-from route import Route
+from .route import Route
 
 class TaxiRouteInfoApi:
     api_url = "https://taxi-routeinfo.taxi.yandex.net/taxi_info"

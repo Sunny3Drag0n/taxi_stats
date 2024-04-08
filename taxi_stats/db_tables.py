@@ -1,6 +1,7 @@
-from .route import Route
+from .route import Route, GeographicCoordinate
 from .time_schedule import Week, Day
 from .trip_info import TripInfo
+import json
 
 class DbTable:
     def __init__(self, db_connection_pool) -> None:
@@ -79,6 +80,13 @@ class RoutesTable(DbTable):
             ) RETURNING route_id;
         ''')
 
+    def get_route(self, route_id) -> Route:
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'SELECT * FROM {self.table_name} WHERE route_id = {route_id};')
+        row = cursor.fetchone()
+        cursor.close()
+        return Route(from_coords=GeographicCoordinate(row[2], row[3]), dest_coords=GeographicCoordinate(row[4], row[5]), comment=row[6])
+
     def get_all_routes(self, client_id) -> list:
         cursor = self.db_connection.cursor()
         cursor.execute(f'SELECT * FROM {self.table_name} WHERE client_id = {client_id};')
@@ -116,11 +124,11 @@ class DebugTable(DbTable):
                 response_code, 
                 response_json
                 ) VALUES (
-                    {datetime}, 
+                    '{datetime}', 
                     {route_id},
-                    {request},
+                    '{json.dumps(request)}',
                     {response_code},
-                    {response}
+                    '{json.dumps(response)}'
                 ) RETURNING id;
         ''')
 
@@ -149,8 +157,8 @@ class RequestScheduleTable(DbTable):
                 day_time_mapping
                 ) VALUES (
                     {route_id}, 
-                    {schedule.get_mapping()}
-                ) RETURNING schedule_id;
+                    '{json.dumps(schedule.get_mapping())}'
+                ) RETURNING id;
         ''')
         
     def get_route_schedule(self, route_id) -> list:
@@ -175,7 +183,7 @@ class UnavailableTripsStatisticsTable(DbTable):
                 route_id INT REFERENCES routes(route_id),
                 api_request_id INT REFERENCES api_debug(id),
                 datetime TIMESTAMP,							-- Дата запроса
-                trip_class VARCHAR(50),                     -- Класс поездки
+                trip_class VARCHAR(50)                      -- Класс поездки
             );
         ''')
         cursor.close()
@@ -190,7 +198,7 @@ class UnavailableTripsStatisticsTable(DbTable):
                 route_id, 
                 trip_class
             ) VALUES (
-                {datetime}, 
+                '{datetime}', 
                 {route_id}, 
                 '{info.class_level()}'
             );
@@ -223,7 +231,6 @@ class AvailableTripsStatisticsTable(DbTable):
                 route_id INT REFERENCES routes(route_id),
                 api_request_id INT REFERENCES api_debug(id),
                 datetime TIMESTAMP,							-- Дата запроса
-                trip_available BOOLEAN,                     -- Доступность поездки
                 trip_class VARCHAR(50),                     -- Класс поездки
                 travel_time INTERVAL,                       -- Время поездки
                 wait_time INTERVAL,                         -- Время ожидания
@@ -245,7 +252,7 @@ class AvailableTripsStatisticsTable(DbTable):
                 trip_class, 
                 price
             ) VALUES (
-                {datetime}, 
+                '{datetime}', 
                 {route_id}, 
                 INTERVAL '{info.travel_time()} seconds', 
                 INTERVAL '{info.waiting_time()} seconds', 
