@@ -2,6 +2,7 @@ from .route import Route, GeographicCoordinate
 from .time_schedule import Week, Day
 from .trip_info import TripInfo
 import json
+from typing import Optional
 
 class DbTable:
     def __init__(self, db_connection_pool) -> None:
@@ -87,9 +88,12 @@ class RoutesTable(DbTable):
         cursor.close()
         return Route(from_coords=GeographicCoordinate(row[2], row[3]), dest_coords=GeographicCoordinate(row[4], row[5]), comment=row[6])
 
-    def get_all_routes(self, client_id) -> list:
+    def get_all_routes(self, client_id : Optional[int] = None) -> list:
         cursor = self.db_connection.cursor()
-        cursor.execute(f'SELECT * FROM {self.table_name} WHERE client_id = {client_id};')
+        if client_id is None:
+            cursor.execute(f'SELECT * FROM {self.table_name};')
+        else:
+            cursor.execute(f'SELECT * FROM {self.table_name} WHERE client_id = {client_id};')
         rows = cursor.fetchall()
         cursor.close()
         return rows
@@ -160,10 +164,17 @@ class RequestScheduleTable(DbTable):
                     '{json.dumps(schedule.get_mapping())}'
                 ) RETURNING id;
         ''')
-        
+
     def get_route_schedule(self, route_id) -> list:
         cursor = self.db_connection.cursor()
         cursor.execute(f'SELECT * FROM {self.table_name} WHERE route_id = {route_id};')
+        rows = cursor.fetchall()
+        cursor.close()
+        return rows
+
+    def get_all_schedule(self) -> list:
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'SELECT * FROM {self.table_name};')
         rows = cursor.fetchall()
         cursor.close()
         return rows

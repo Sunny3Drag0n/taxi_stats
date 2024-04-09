@@ -33,11 +33,13 @@ def old_run():
 def generate_day(day_index : int, from_time : str, to_time : str) -> Day:
     day = Day(name=Week.days_names[day_index])
     
-    from datetime import datetime, timedelta
-    time = datetime.strptime(from_time, "%H:%M")
-    while time <= datetime.strptime(to_time, "%H:%M"):
-        day.time_schedule[time.strftime('%H:%M')] = []
-        time += timedelta(minutes=10)
+    from datetime import datetime, timedelta, time
+    time_point = datetime.strptime(from_time, "%H:%M")
+    to_time_point = datetime.strptime(to_time, "%H:%M")
+    
+    while time_point <= to_time_point:
+        day.add_time(time_point.time())
+        time_point += timedelta(minutes=10)
         
     return day
 
@@ -59,12 +61,14 @@ def generate_test_case(day_index : int) -> tuple[list[Route], Week]:
 def run():
     client_id = 0
     core = Core()
+    test_day = 1
 
     # Добавляю тестовые данные
-    test_day = 1
-    routes, week = generate_test_case(test_day)
-    for route in routes:
-        core.add_route(route, week, client_id)
+    schedule = core.db.request_schedule_table.get_all_schedule()
+    if len(schedule) == 0:
+        routes, week = generate_test_case(test_day)
+        for route in routes:
+            core.add_route(route, week, client_id)
     
     # Хочу пройтись по маршрутам
     schedule_day = core._request_schedule.days[Week.days_names[test_day]]

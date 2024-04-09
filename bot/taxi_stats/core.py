@@ -1,9 +1,9 @@
 from .db_interface import DataBase
 from .taxi_route_info_api import TaxiRouteInfoApi
-from .route import Route
+from .route import Route, GeographicCoordinate
 from .time_schedule import Week, Day
 from .trip_info import TripInfo, parse_response
-from datetime import datetime
+from datetime import datetime, time
 
 class DayRequest(Day):
     pass
@@ -21,8 +21,21 @@ class Core:
         self.load_from_db()
     
     def load_from_db(self):
-        pass
-    
+        rows = self.db.request_schedule_table.get_all_schedule()
+        for row in rows:
+            id = row[0]
+            route_id = row[1]
+            schedule = row[2]
+            for day_name, time_list in schedule.items():
+                if len(time_list) > 0:
+                    day = Day(day_name)
+                    for time_str in time_list:
+                        key = time.fromisoformat(time_str)
+                        day.add_time(key)
+                        day.time_schedule[key].append(route_id)
+
+                    self._request_schedule.add()
+
     def add_route(self, route : Route, week : Week, client_id):
         # Сохранили в БД маршрут
         route_id = self.db.routes_table.insert_data(route, client_id)
