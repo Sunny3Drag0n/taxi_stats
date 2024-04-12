@@ -11,14 +11,17 @@ from datetime import datetime, time, timedelta
 class Core:
     def __init__(self) -> None:
         import json
-        with open("configs/yandex_taxi_api.json", "r", encoding='utf-8') as config_file:
+
+        with open("configs/yandex_taxi_api.json", "r", encoding="utf-8") as config_file:
             config = json.load(config_file)
 
         self.db = DataBase()
-        self.taxi_api = TaxiRouteInfoApi(CLID=config.get("CLID"), APIKEY=config.get("APIKEY"))
-        
+        self.taxi_api = TaxiRouteInfoApi(
+            CLID=config.get("CLID"), APIKEY=config.get("APIKEY")
+        )
+
         self._load_schedule_from_db()
-    
+
     def _load_schedule_from_db(self):
         """
         Загрузка расписания из БД
@@ -39,7 +42,7 @@ class Core:
 
                     self._request_schedule.add(day=day)
 
-    async def add_route(self, route : Route, week : Week, client_id):
+    async def add_route(self, route: Route, week: Week, client_id):
         """
         Интерфейс добавления маршрута с расписанием для пользователя
         с сохранением всех данных в БД.
@@ -49,10 +52,10 @@ class Core:
         for day in week.days.values():
             for time in day.time_schedule:
                 day.time_schedule[time].append(route_id)
-                
+
         # Сохранили в БД расписание
         self.db.request_schedule_table.insert_data(route_id, week)
-        
+
         self._request_schedule.add(day)
 
     async def execute_request_from_api(self, route_id):
@@ -61,20 +64,30 @@ class Core:
         с сохранением всех данных в БД.
         """
         route = self.db.routes_table.get_route(route_id)
-        
+
         current_datetime = datetime.now()
         response = self.taxi_api.request(route)
         request = self.taxi_api.params
-        
-        self.db.debug_table.insert_data(current_datetime.strftime("%Y-%m-%d %H:%M:%S"), route_id, request, response.status_code, response.json())
-        
+
+        self.db.debug_table.insert_data(
+            current_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            route_id,
+            request,
+            response.status_code,
+            response.json(),
+        )
+
         if response.status_code == 200:
             info_list = parse_response(response)
             for obj in info_list:
                 if obj.is_available():
-                    self.db.available_trips_statistics_table.insert_data(current_datetime, route_id, obj)
+                    self.db.available_trips_statistics_table.insert_data(
+                        current_datetime, route_id, obj
+                    )
                 else:
-                    self.db.unavailable_trips_statistics_table.insert_data(current_datetime, route_id, obj)
+                    self.db.unavailable_trips_statistics_table.insert_data(
+                        current_datetime, route_id, obj
+                    )
 
     async def wait_next_task(self) -> list[int]:
         """

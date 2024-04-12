@@ -4,6 +4,7 @@ from .trip_info import TripInfo
 import json
 from typing import Optional
 
+
 class DbTable:
     def __init__(self, db_connection_pool) -> None:
         self.connection_pool = db_connection_pool
@@ -15,16 +16,19 @@ class DbTable:
         self.connection_pool.putconn(self.db_connection)
 
     def _table_exists(cursor, table_name):
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.tables
                 WHERE table_name = %s
             )
-        """, (table_name,))
+        """,
+            (table_name,),
+        )
         return cursor.fetchone()[0]
 
-    def _create_if_noexist(self, cursor, table_name : str, table_def : str):
+    def _create_if_noexist(self, cursor, table_name: str, table_def: str):
         if not DbTable._table_exists(cursor, table_name=table_name):
             self.execute(table_def)
 
@@ -32,9 +36,9 @@ class DbTable:
         cursor = self.db_connection.cursor()
         cursor.execute(sql_request)
         cursor.close()
-        
+
     def insert(self, sql_request) -> int:
-        """ 
+        """
         return id записи
         """
         cursor = self.db_connection.cursor()
@@ -43,17 +47,23 @@ class DbTable:
         cursor.close()
         return id
 
+
 class RoutesTable(DbTable):
     """
-        Таблица содержащая маршруты поездок.
-        Маршруты для каждого клиента свои.
-        Маршрут: откуда, куда, пользовательский комментарий
+    Таблица содержащая маршруты поездок.
+    Маршруты для каждого клиента свои.
+    Маршрут: откуда, куда, пользовательский комментарий
     """
-    table_name = 'routes'
+
+    table_name = "routes"
+
     def __init__(self, db_connection_pool):
         DbTable.__init__(self, db_connection_pool)
         cursor = self.db_connection.cursor()
-        self._create_if_noexist(cursor, self.table_name, f'''
+        self._create_if_noexist(
+            cursor,
+            self.table_name,
+            f"""
         CREATE TABLE {self.table_name} (
             route_id SERIAL PRIMARY KEY,                -- ID маршрута
             client_id INT,                              -- ID клиента, задавшего маршрут
@@ -63,11 +73,13 @@ class RoutesTable(DbTable):
             dest_longitude FLOAT,                       -- Координата завершения поездки (долгота)
             client_comment TEXT                         -- Пользьвательский комментарий к маршруту
         );
-        ''')
+        """,
+        )
         cursor.close()
-    
-    def insert_data(self, route : Route, client_id : int) -> int:
-        return self.insert(f'''
+
+    def insert_data(self, route: Route, client_id: int) -> int:
+        return self.insert(
+            f"""
             INSERT INTO {self.table_name} (
                 client_id,
                 from_latitude, from_longitude, 
@@ -79,35 +91,48 @@ class RoutesTable(DbTable):
                 {route.dest_coords.latitude}, {route.dest_coords.longitude}, 
                 '{route.comment}'
             ) RETURNING route_id;
-        ''')
+        """
+        )
 
     def get_route(self, route_id) -> Route:
         cursor = self.db_connection.cursor()
-        cursor.execute(f'SELECT * FROM {self.table_name} WHERE route_id = {route_id};')
+        cursor.execute(f"SELECT * FROM {self.table_name} WHERE route_id = {route_id};")
         row = cursor.fetchone()
         cursor.close()
-        return Route(from_coords=GeographicCoordinate(row[2], row[3]), dest_coords=GeographicCoordinate(row[4], row[5]), comment=row[6])
+        return Route(
+            from_coords=GeographicCoordinate(row[2], row[3]),
+            dest_coords=GeographicCoordinate(row[4], row[5]),
+            comment=row[6],
+        )
 
-    def get_all_routes(self, client_id : Optional[int] = None) -> list:
+    def get_all_routes(self, client_id: Optional[int] = None) -> list:
         cursor = self.db_connection.cursor()
         if client_id is None:
-            cursor.execute(f'SELECT * FROM {self.table_name};')
+            cursor.execute(f"SELECT * FROM {self.table_name};")
         else:
-            cursor.execute(f'SELECT * FROM {self.table_name} WHERE client_id = {client_id};')
+            cursor.execute(
+                f"SELECT * FROM {self.table_name} WHERE client_id = {client_id};"
+            )
         rows = cursor.fetchall()
         cursor.close()
         return rows
 
+
 class DebugTable(DbTable):
     """
-        Таблица содержащая отладочные данные:
-        время запроса, сам запрос, ответ
+    Таблица содержащая отладочные данные:
+    время запроса, сам запрос, ответ
     """
-    table_name = 'api_debug'
+
+    table_name = "api_debug"
+
     def __init__(self, db_connection_pool):
         DbTable.__init__(self, db_connection_pool)
         cursor = self.db_connection.cursor()
-        self._create_if_noexist(cursor, self.table_name, f'''
+        self._create_if_noexist(
+            cursor,
+            self.table_name,
+            f"""
             CREATE TABLE {self.table_name} (
                 id SERIAL PRIMARY KEY,                      -- ID запроса к api
                 datetime TIMESTAMP,                         -- когда запрос
@@ -116,11 +141,15 @@ class DebugTable(DbTable):
                 response_code INT,                          -- код ответа
                 response_json JSONB                         -- ответ
             );
-        ''')
+        """,
+        )
         cursor.close()
-    
-    def insert_data(self, datetime, route_id : int, request, response_code : int, response) -> int:
-        return self.insert(f'''
+
+    def insert_data(
+        self, datetime, route_id: int, request, response_code: int, response
+    ) -> int:
+        return self.insert(
+            f"""
             INSERT INTO {self.table_name} (
                 datetime,
                 route_id, 
@@ -134,28 +163,37 @@ class DebugTable(DbTable):
                     {response_code},
                     '{json.dumps(response)}'
                 ) RETURNING id;
-        ''')
+        """
+        )
+
 
 class RequestScheduleTable(DbTable):
     """
-        Таблица содержащая расписание запросов.
-        Расписание - мапинг вида {'день недели': ['время1', 'время2']}
+    Таблица содержащая расписание запросов.
+    Расписание - мапинг вида {'день недели': ['время1', 'время2']}
     """
-    table_name = 'request_schedule'
+
+    table_name = "request_schedule"
+
     def __init__(self, db_connection_pool):
         DbTable.__init__(self, db_connection_pool)
         cursor = self.db_connection.cursor()
-        self._create_if_noexist(cursor, self.table_name, f'''
+        self._create_if_noexist(
+            cursor,
+            self.table_name,
+            f"""
             CREATE TABLE {self.table_name} (
                 id SERIAL PRIMARY KEY,                      -- ID расписания 
                 route_id INT REFERENCES routes(route_id),
                 day_time_mapping JSONB                      -- расписание запросов в виде JSON соответствия 
             );
-        ''')
+        """,
+        )
         cursor.close()
-        
-    def insert_data(self, route_id : int, schedule : Week) -> int:
-        return self.insert(f'''
+
+    def insert_data(self, route_id: int, schedule: Week) -> int:
+        return self.insert(
+            f"""
             INSERT INTO {self.table_name} (
                 route_id,
                 day_time_mapping
@@ -163,32 +201,39 @@ class RequestScheduleTable(DbTable):
                     {route_id}, 
                     '{json.dumps(schedule.get_mapping())}'
                 ) RETURNING id;
-        ''')
+        """
+        )
 
     def get_route_schedule(self, route_id) -> list:
         cursor = self.db_connection.cursor()
-        cursor.execute(f'SELECT * FROM {self.table_name} WHERE route_id = {route_id};')
+        cursor.execute(f"SELECT * FROM {self.table_name} WHERE route_id = {route_id};")
         rows = cursor.fetchall()
         cursor.close()
         return rows
 
     def get_all_schedule(self) -> list:
         cursor = self.db_connection.cursor()
-        cursor.execute(f'SELECT * FROM {self.table_name};')
+        cursor.execute(f"SELECT * FROM {self.table_name};")
         rows = cursor.fetchall()
         cursor.close()
         return rows
 
+
 class UnavailableTripsStatisticsTable(DbTable):
     """
-        Таблица с недоступными поездками.
-        Информация: когда, какой класс, по какому маршруту
+    Таблица с недоступными поездками.
+    Информация: когда, какой класс, по какому маршруту
     """
-    table_name = 'statistics_unavailable'
+
+    table_name = "statistics_unavailable"
+
     def __init__(self, db_connection_pool):
         DbTable.__init__(self, db_connection_pool)
         cursor = self.db_connection.cursor()
-        self._create_if_noexist(cursor, self.table_name, f'''
+        self._create_if_noexist(
+            cursor,
+            self.table_name,
+            f"""
             CREATE TABLE {self.table_name} (
                 id SERIAL PRIMARY KEY,                      -- ID запроса
                 route_id INT REFERENCES routes(route_id),
@@ -196,14 +241,16 @@ class UnavailableTripsStatisticsTable(DbTable):
                 datetime TIMESTAMP,							-- Дата запроса
                 trip_class VARCHAR(50)                      -- Класс поездки
             );
-        ''')
+        """,
+        )
         cursor.close()
-        
-    def insert_data(self, datetime, route_id, info : TripInfo):
+
+    def insert_data(self, datetime, route_id, info: TripInfo):
         if info.is_available():
-            raise Exception(f'TripInfo is available')
-        
-        self.execute(f'''
+            raise Exception(f"TripInfo is available")
+
+        self.execute(
+            f"""
             INSERT INTO {self.table_name} (
                 datetime, 
                 route_id, 
@@ -213,30 +260,39 @@ class UnavailableTripsStatisticsTable(DbTable):
                 {route_id}, 
                 '{info.class_level()}'
             );
-        ''')
-    
-    def get_route_statistics(self, route_id, day_name : str) -> list:
+        """
+        )
+
+    def get_route_statistics(self, route_id, day_name: str) -> list:
         cursor = self.db_connection.cursor()
-        cursor.execute(f"""
+        cursor.execute(
+            f"""
             SELECT * FROM {self.table_name} 
             JOIN {RoutesTable.table_name} ON {self.table_name}.route_id = {RoutesTable.table_name}.route_id 
             WHERE {self.table_name}.route_id = {route_id} 
             AND EXTRACT(dow FROM {self.table_name}.datetime) = {Week.days_names.index(day_name)};
-        """)
+        """
+        )
         rows = cursor.fetchall()
         cursor.close()
         return rows
 
+
 class AvailableTripsStatisticsTable(DbTable):
     """
-        Таблица с доступными поездками.
-        Цена, время поездки, класс поездки, время ожидания
+    Таблица с доступными поездками.
+    Цена, время поездки, класс поездки, время ожидания
     """
-    table_name = 'statistics_available'
+
+    table_name = "statistics_available"
+
     def __init__(self, db_connection_pool):
         DbTable.__init__(self, db_connection_pool)
         cursor = self.db_connection.cursor()
-        self._create_if_noexist(cursor, self.table_name, f'''
+        self._create_if_noexist(
+            cursor,
+            self.table_name,
+            f"""
             CREATE TABLE {self.table_name} (
                 id SERIAL PRIMARY KEY,                      -- ID запроса
                 route_id INT REFERENCES routes(route_id),
@@ -247,14 +303,16 @@ class AvailableTripsStatisticsTable(DbTable):
                 wait_time INTERVAL,                         -- Время ожидания
                 price NUMERIC(10, 2)                        -- Цена поездки
             );
-        ''')
+        """,
+        )
         cursor.close()
-        
-    def insert_data(self, datetime, route_id, info : TripInfo):
+
+    def insert_data(self, datetime, route_id, info: TripInfo):
         if not info.is_available():
-            raise Exception(f'TripInfo is unavailable')
-            
-        self.execute(f'''
+            raise Exception(f"TripInfo is unavailable")
+
+        self.execute(
+            f"""
             INSERT INTO {self.table_name} (
                 datetime, 
                 route_id, 
@@ -270,21 +328,25 @@ class AvailableTripsStatisticsTable(DbTable):
                 '{info.class_level()}', 
                 {info.price()}
             );
-        ''')
+        """
+        )
 
-    def get_route_statistics(self, route_id, day_name : str) -> list:
+    def get_route_statistics(self, route_id, day_name: str) -> list:
         cursor = self.db_connection.cursor()
-        cursor.execute(f"""
+        cursor.execute(
+            f"""
             SELECT * FROM {self.table_name} 
             JOIN {RoutesTable.table_name} ON {self.table_name}.route_id = {RoutesTable.table_name}.route_id 
             WHERE {self.table_name}.route_id = {route_id} 
             AND EXTRACT(dow FROM {self.table_name}.datetime) = {Week.days_names.index(day_name)};
-        """)
+        """
+        )
         rows = cursor.fetchall()
         cursor.close()
         return rows
-    
-# CREATE INDEX idx_routes_client_id ON routes (client_id);                 
+
+
+# CREATE INDEX idx_routes_client_id ON routes (client_id);
 # CREATE INDEX idx_request_schedule_event_day ON request_schedule (event_day);
 # CREATE INDEX idx_api_debug_datetime ON api_debug (datetime);
 # CREATE INDEX idx_api_debug_route_id ON api_debug (route_id);
