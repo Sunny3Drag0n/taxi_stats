@@ -18,12 +18,22 @@ class Day:
         """
         self.time_schedule.setdefault(time, [])
 
-    def add_to_schedule(self, id: int, time: list[time]):
+    def add_to_schedule(self, id: int, times: list[time]):
         """
         Интерфейс заполнения расписания
         """
-        for t in time:
+        for t in times:
             self.time_schedule.setdefault(t, []).append(id)
+
+    def remove_from_schedule(self, id: int, times: list[time]):
+        """
+        Интерфейс удаления элементов
+        """
+        for t in times:
+            if t in self.time_schedule and id in self.time_schedule[t]:
+                self.time_schedule[t].remove(id)
+                if len(self.time_schedule[t]) == 0:
+                    del self.time_schedule[t]
 
     def merge(self, other_day: "Day") -> "Day":
         """
@@ -146,6 +156,15 @@ class Week:
 
         return next_point, values
 
+    def from_json(data):
+        week = Week()
+        for day_name, schedule in data.items():
+            day = Day(day_name)
+            for t in schedule:
+                day.add_time(datetime.strptime(t, "%H:%M").time())
+            week.add(day)
+        return week
+
 
 if __name__ == "__main__":
     from pprint import pprint
@@ -156,17 +175,18 @@ if __name__ == "__main__":
     day3 = Day("Monday")
     day4 = Day("Thursday")
 
-    day1.add_to_schedule(id=123, time=[time(7, 0), time(12, 0)])
-    day1.add_to_schedule(id=321, time=[time(7, 0), time(12, 0), time(11, 0)])
+    day1.add_to_schedule(id=123, times=[time(7, 0), time(12, 0)])
+    day1.add_to_schedule(id=321, times=[time(7, 0), time(12, 0), time(11, 0)])
     print("Заполнен день 1:")
     pprint(day1.time_schedule)
-    day2.add_to_schedule(id=321, time=[time(7, 0), time(12, 0)])
+    day2.add_to_schedule(id=321, times=[time(7, 0), time(12, 0)])
+    day2.remove_from_schedule(id=321, times=[time(7, 11), time(12, 0)])
     print("Заполнен день 2:")
     pprint(day2.time_schedule)
-    day3.add_to_schedule(id=222, time=[time(7, 0), time(12, 0)])
+    day3.add_to_schedule(id=222, times=[time(7, 0), time(12, 0)])
     print("Заполнен день 3:")
     pprint(day3.time_schedule)
-    day4.add_to_schedule(id=123, time=[time(8, 0), time(11, 0)])
+    day4.add_to_schedule(id=123, times=[time(8, 0), time(11, 0)])
     print("Заполнен день 4:")
     pprint(day4.time_schedule)
 
