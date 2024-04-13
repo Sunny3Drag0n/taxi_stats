@@ -61,7 +61,7 @@ class TripInfo:
 
 def parse_response(response: requests.Response) -> list[TripInfo]:
     """
-    Парсинг
+    Парсинг ответа API такси
     """
     data = response.json()
     return [

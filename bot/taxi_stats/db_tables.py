@@ -105,7 +105,7 @@ class RoutesTable(DbTable):
             comment=row[6],
         )
 
-    def get_all_routes(self, client_id: Optional[int] = None) -> list:
+    def get_all_routes(self, client_id: Optional[int] = None) -> dict[int, Route]:
         cursor = self.db_connection.cursor()
         if client_id is None:
             cursor.execute(f"SELECT * FROM {self.table_name};")
@@ -115,7 +115,15 @@ class RoutesTable(DbTable):
             )
         rows = cursor.fetchall()
         cursor.close()
-        return rows
+        routes = {
+            row[0]: Route(
+                from_coords=GeographicCoordinate(row[2], row[3]),
+                dest_coords=GeographicCoordinate(row[4], row[5]),
+                comment=row[6],
+            )
+            for row in rows
+        }
+        return routes
 
 
 class DebugTable(DbTable):

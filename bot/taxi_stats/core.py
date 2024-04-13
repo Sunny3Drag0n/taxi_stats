@@ -1,10 +1,9 @@
 import asyncio
 from .db_interface import DataBase
 from .taxi_route_info_api import TaxiRouteInfoApi
-from .route import Route, GeographicCoordinate
+from .route import Route
 from .time_schedule import Week, Day
-from .trip_info import TripInfo, parse_response
-from .server import Server
+from .trip_info import parse_response
 from datetime import datetime, time, timedelta
 
 
@@ -42,13 +41,20 @@ class Core:
 
                     self._request_schedule.add(day=day)
 
-    async def add_route(self, route: Route, week: Week, client_id):
+    async def add_route(self, client_id, route: Route):
         """
         Интерфейс добавления маршрута с расписанием для пользователя
         с сохранением всех данных в БД.
         """
         # Сохранили в БД маршрут
         route_id = self.db.routes_table.insert_data(route, client_id)
+        return route_id
+
+    async def add_schedule(self, route_id, week: Week):
+        """
+        Интерфейс добавления расписания маршрута
+        с сохранением всех данных в БД.
+        """
         for day in week.days.values():
             for time in day.time_schedule:
                 day.time_schedule[time].append(route_id)
@@ -113,10 +119,6 @@ class Core:
             выполняем запросы
         """
         while True:
-            ids = self.wait_next_task()
+            ids = await self.wait_next_task()
             for route_id in ids:
                 self.execute_request_from_api(route_id)
-
-    async def _handle(self, message):
-        print(message)
-        pass
