@@ -41,7 +41,7 @@ class Core:
 
                     self._request_schedule.add(day=day)
 
-    async def add_route(self, client_id, route: Route):
+    async def add_route(self, client_id: int, route: Route) -> int:
         """
         Интерфейс добавления маршрута с расписанием для пользователя
         с сохранением всех данных в БД.
@@ -50,7 +50,7 @@ class Core:
         route_id = self.db.routes_table.insert_data(route, client_id)
         return route_id
 
-    async def add_schedule(self, route_id, week: Week):
+    async def add_route_schedule(self, route_id, week: Week):
         """
         Интерфейс добавления расписания маршрута
         с сохранением всех данных в БД.
@@ -63,6 +63,16 @@ class Core:
         self.db.request_schedule_table.insert_data(route_id, week)
 
         self._request_schedule.add(day)
+
+    async def delete_route_schedule(self, client_id: int, route_id: int):
+        """
+        Проверяется что route_id принадлежит client_id.
+        Если да - удаляет расписание маршрута пользователя
+        с сохранением всех данных в БД.
+        """
+        routes = self.db.routes_table.get_all_routes(client_id=client_id)
+        if route_id in routes:
+            self.db.request_schedule_table.delete_data(route_id)
 
     async def execute_request_from_api(self, route_id):
         """
@@ -99,6 +109,7 @@ class Core:
         """
         Ожидание времени следующего запроса в расписании.
         Асинхронно ожидаем по минуте времени наступления события,
+        Периодически обновляем расписание из БД.
         Возвращаем list[route_id] когда текущее время
         с погрешностью в 1 мин удовлетворяет искомое.
         """
@@ -111,6 +122,8 @@ class Core:
                 await asyncio.sleep(delta.seconds)
             else:
                 await asyncio.sleep(60)
+
+            self._load_schedule_from_db()
 
     async def run_event_loop(self):
         """

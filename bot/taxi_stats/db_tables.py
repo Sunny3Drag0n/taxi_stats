@@ -94,11 +94,14 @@ class RoutesTable(DbTable):
         """
         )
 
-    def get_route(self, route_id) -> Route:
+    def get_route(self, route_id: int, client_id: Optional[int] = None) -> Route:
         cursor = self.db_connection.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE route_id = {route_id};")
         row = cursor.fetchone()
         cursor.close()
+        if client_id is not None:
+            if row[1] != client_id:
+                return None
         return Route(
             from_coords=GeographicCoordinate(row[2], row[3]),
             dest_coords=GeographicCoordinate(row[4], row[5]),
@@ -209,6 +212,14 @@ class RequestScheduleTable(DbTable):
                     {route_id}, 
                     '{json.dumps(schedule.get_mapping())}'
                 ) RETURNING id;
+        """
+        )
+
+    def delete_data(self, route_id: int):
+        return self.execute(
+            f"""
+            DELETE FROM {self.table_name}
+            WHERE route_id = {route_id};
         """
         )
 

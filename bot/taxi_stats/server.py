@@ -105,13 +105,13 @@ class Server:
         app = web.Application()
         app.router.add_post("/add_route", self.add_route)
         app.router.add_post("/add_route_schedule", self.add_route_schedule)
+        app.router.add_get("/get_all_routes", self.get_all_routes)
+        app.router.add_get("/get_route_info", self.get_route_info)
+        app.router.add_delete("/delete_route_schedule", self.delete_route_schedule)
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, "localhost", 13337)
         await site.start()
-        # app.router.add_post("/get_routes_by_client_id", get_routes_by_client_id)
-        # app.router.add_get("/get_route_info/{route_id}", get_route_info)
-        # app.router.add_delete("/delete_route/{route_id}", delete_route)
 
     async def add_route(self, request):
         data = await request.json()
@@ -131,39 +131,56 @@ class Server:
     async def add_route_schedule(self, request):
         data = await request.json()
         try:
+            client_id = data.get("client_id")
             message = EditRouteScheduleMessage.from_json(data=data)
-            self.core.add_schedule(route_id=message.route_id, week=message.schedule)
-            return web.json_response(status=200, data={"route_id": f"{0}"})
+            self.core.add_route_schedule(
+                route_id=message.route_id, week=message.schedule
+            )
+            return web.json_response(
+                status=200, data={"client_id": f"{client_id}", "route_id": f"{0}"}
+            )
         except Exception as e:
             return web.json_response(status=400)
 
+    async def delete_route_schedule(self, request):
+        data = await request.json()
+        try:
+            client_id = data.get("client_id")
+            route_id = data.get("route_id")
+            self.core.remove_route(route_id=route_id, client_id=client_id)
+            return web.json_response({"message": "Route deleted successfully"})
+        except Exception as e:
+            return web.json_response(status=404)
+
     async def get_all_routes(self, request):
         data = await request.json()
-        client_id = data.get("client_id")
-        routes = self.core.db.routes_table.get_all_routes(client_id=client_id)
-        routes_json = {
-            "routes": [
-                GetRouteMessage(route_id, route).to_json()
-                for route_id, route in routes.items()
-            ]
-        }
-        return web.json_response(routes_json)
+        try:
+            client_id = data.get("client_id")
+            routes = self.core.db.routes_table.get_all_routes(client_id=client_id)
+            routes_json = {
+                "client_id": f"{client_id}",
+                "routes": [
+                    GetRouteMessage(route_id, route).to_json()
+                    for route_id, route in routes.items()
+                ],
+            }
+            return web.json_response(routes_json)
+        except Exception as e:
+            return web.json_response(status=404)
 
     async def get_route_info(self, request):
         data = await request.json()
-        route_id = data.get("route_id")
-        route = self.core.db.routes_table.get_route(route_id=route_id)
-        routes_json = {"routes": [GetRouteMessage(route_id, route).to_json()]}
-        return web.json_response(routes_json)
-
-
-# async def delete_route(request):
-#     route_id = request.match_info["route_id"]
-#     # Здесь должна быть логика удаления маршрута по route_id
-#     # Например, если у вас есть класс для работы с маршрутами, вы можете вызвать его метод для удаления маршрута
-#     # success = route_manager.delete_route(route_id)
-#     success = routes_data.pop(int(route_id), None) is not None
-#     if success:
-#         return web.json_response({"message": "Route deleted successfully"})
-#     else:
-#         return web.json_response({"error": "Route not found"}, status=404)
+        try:
+            client_id = data.get("client_id")
+            route_id = data.get("route_id")
+            route = self.core.db.routes_table.get_route(
+                route_id=route_id, client_id=client_id
+            )
+            if route is not None:
+                routes_json = {
+                    "client_id": f"{client_id}",
+                    "routes": [GetRouteMessage(route_id, route).to_json()],
+                }
+                return web.json_response(routes_json)
+        finally:
+            return web.json_response(status=404)
