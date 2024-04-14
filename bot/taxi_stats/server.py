@@ -1,17 +1,16 @@
-import asyncio
 from aiohttp import web
-import json
+import json, requests
 
 from .route import Route, GeographicCoordinate
 from .time_schedule import Week, Day
-from .core import QueryCore
 from .route import Route
+from .db_interface import DataBase
 
 
 class AddRouteMessage:
     def __init__(self, client_id: int, route: Route) -> None:
-        self.client_id = client_id
-        self.route = route
+        self.client_id: int = client_id
+        self.route: Route = route
 
     def from_json(data) -> "AddRouteMessage":
         client_id = data.get("client_id")
@@ -44,12 +43,12 @@ class AddRouteMessage:
         }
 
 
-class GetRouteMessage:
+class RouteInfoMessage:
     def __init__(self, route_id: int, route: Route) -> None:
-        self.route_id = route_id
-        self.route = route
+        self.route_id: int = route_id
+        self.route: Route = route
 
-    def from_json(data) -> "GetRouteMessage":
+    def from_json(data) -> "RouteInfoMessage":
         route_id = data.get("route_id")
         from_coord = data.get("from")
         dest_coord = data.get("dest")
@@ -80,55 +79,89 @@ class GetRouteMessage:
         }
 
 
-class EditRouteScheduleMessage:
-    def __init__(self, route_id: int, schedule: Week) -> None:
-        self.route_id = route_id
-        self.schedule = schedule
+class ListOfRouteInfoMessage:
+    def __init__(self, client_id, routes: list[RouteInfoMessage]) -> None:
+        self.client_id: int = client_id
+        self.routes: list[RouteInfoMessage] = routes
 
-    def from_json(data) -> "EditRouteScheduleMessage":
-        route_id = data.get("route_id")
-        schedule = data.get("schedule")
-        week = Week.from_json(schedule)
-        return EditRouteScheduleMessage(route_id, week)
+    def from_json(data) -> "ListOfRouteInfoMessage":
+        client_id = data.get("client_id")
+        return GetListOfRouteInfoMessage(
+            client_id,
+            [GetRouteInfoMessage.from_json(data) for data in data.get("routes")],
+        )
 
     def to_json(self):
         return {
+            "client_id": f"{self.client_id}",
+            "routes": [route.to_json() for route in self.routes],
+        }
+
+
+class EditRouteScheduleMessage:
+    def __init__(self, client_id: int, route_id: int, schedule: Week) -> None:
+        self.client_id: int = client_id
+        self.route_id: int = route_id
+        self.schedule: Week = schedule
+
+    def from_json(data) -> "EditRouteScheduleMessage":
+        client_id = data.get("client_id")
+        route_id = data.get("route_id")
+        schedule = data.get("schedule")
+        week = Week.from_json(schedule)
+        return EditRouteScheduleMessage(client_id, route_id, week)
+
+    def to_json(self):
+        return {
+            "client_id": f"{self.client_id}",
             "route_id": f"{self.route_id}",
             "schedule": {json.dumps(self.schedule.get_mapping())},
         }
 
 
-class CoreInterface(QueryCore):
-    def __init__(self):
-        QueryCore.__init__(self)
+class SuccesfulRouteMessage:
+    def __init__(self, client_id: int, route_id: int) -> None:
+        self.client_id: int = client_id
+        self.route_id: int = route_id
 
-    def has_access(self, client_id: int, route_id: int):
+    def from_json(data) -> "SuccesfulRouteMessage":
+        client_id = data.get("client_id")
+        route_id = data.get("route_id")
+        return SuccesfulRouteMessage(client_id, route_id)
+
+    def to_json(self):
+        return {
+            "client_id": f"{self.client_id}",
+            "route_id": f"{self.route_id}",
+        }
+
+
+class Server:
+    def __init__(self) -> None:
+        self.db = DataBase()
+
+    def _has_access(self, client_id: int, route_id: int):
         routes = self.db.routes_table.get_all_routes(client_id=client_id)
         return route_id in routes
 
-    def add_route(self, client_id: int, route: Route) -> int:
+    def _add_route(self, client_id: int, route: Route) -> int:
         """
         Интерфейс добавления маршрута с расписанием для пользователя
         """
         route_id = self.db.routes_table.insert_data(route, client_id)
         return route_id
 
-    def add_route_schedule(self, route_id: int, week: Week):
+    def _add_route_schedule(self, route_id: int, week: Week):
         """
         Интерфейс добавления расписания маршрута
         """
         self.db.request_schedule_table.insert_data(route_id, week)
 
-    def delete_route_schedule(self, route_id: int):
+    def _delete_route_schedule(self, route_id: int):
         """
         Удаляет расписание маршрута.
         """
         self.db.request_schedule_table.delete_data(route_id)
-
-
-class Server:
-    def __init__(self) -> None:
-        self.core = CoreInterface()
 
     def run(self):
         app = web.Application()
@@ -143,31 +176,30 @@ class Server:
         data = await request.json()
         try:
             route_message = AddRouteMessage.from_json(data=data)
-            route_id = self.core.add_route(route_message.client_id, route_message.route)
-            return web.json_response(status=200, data={"route_id": f"{route_id}"})
-        except Exception as e:
-            example_message = AddRouteMessage(
-                0, Route(GeographicCoordinate(0, 0), GeographicCoordinate(1, 1))
-            )
+            route_id = self._add_route(route_message.client_id, route_message.route)
             return web.json_response(
-                status=400,
-                data=example_message.to_json(),
+                status=200,
+                data=SuccesfulRouteMessage(route_message.client_id, route_id).to_json(),
             )
+
+        except Exception as e:
+            return web.json_response(status=400)
 
     async def add_route_schedule(self, request):
         data = await request.json()
         try:
-            client_id = data.get("client_id")
             message = EditRouteScheduleMessage.from_json(data=data)
-            if self.core.has_access(
-                client_id,
-            ):
-                self.core.add_route_schedule(
+            if self._has_access(message.client_id, message.route_id):
+                self._add_route_schedule(
                     route_id=message.route_id, week=message.schedule
                 )
                 return web.json_response(
-                    status=200, data={"client_id": f"{client_id}", "route_id": f"{0}"}
+                    status=200,
+                    data=SuccesfulRouteMessage(
+                        message.client_id, message.route_id
+                    ).to_json(),
                 )
+
             return web.json_response(status=401, data={"message": "access denied"})
 
         except Exception as e:
@@ -178,11 +210,12 @@ class Server:
         try:
             client_id = data.get("client_id")
             route_id = data.get("route_id")
-            if self.core.has_access(
-                client_id,
-            ):
-                self.core.delete_route_schedule(route_id=route_id)
-                return web.json_response({"message": "Route deleted successfully"})
+            if self._has_access(client_id, route_id):
+                self._delete_route_schedule(route_id=route_id)
+                return web.json_response(
+                    status=200,
+                    data=SuccesfulRouteMessage(client_id, route_id).to_json(),
+                )
 
             return web.json_response(status=401, data={"message": "access denied"})
 
@@ -193,15 +226,16 @@ class Server:
         data = await request.json()
         try:
             client_id = data.get("client_id")
-            routes = self.core.db.routes_table.get_all_routes(client_id=client_id)
-            routes_json = {
-                "client_id": f"{client_id}",
-                "routes": [
-                    GetRouteMessage(route_id, route).to_json()
+            routes = self.db.routes_table.get_all_routes(client_id=client_id)
+            message = ListOfRouteInfoMessage(
+                client_id,
+                [
+                    RouteInfoMessage(route_id, route)
                     for route_id, route in routes.items()
                 ],
-            }
-            return web.json_response(routes_json)
+            )
+            return web.json_response(message.to_json())
+
         except Exception as e:
             return web.json_response(status=404)
 
@@ -210,19 +244,86 @@ class Server:
         try:
             client_id = data.get("client_id")
             route_id = data.get("route_id")
-            route = self.core.db.routes_table.get_route(
+            route = self.db.routes_table.get_route(
                 route_id=route_id, client_id=client_id
             )
-            if self.core.has_access(
-                client_id,
-            ):
-                routes_json = {
-                    "client_id": f"{client_id}",
-                    "routes": [GetRouteMessage(route_id, route).to_json()],
-                }
-                return web.json_response(routes_json)
+            if self._has_access(client_id, route_id):
+                message = ListOfRouteInfoMessage(
+                    client_id, [RouteInfoMessage(route_id, route)]
+                )
+                return web.json_response(message.to_json())
 
             return web.json_response(status=401, data={"message": "access denied"})
 
         finally:
             return web.json_response(status=404)
+
+
+def send_add_route_message(url, client_id: int, route: Route) -> SuccesfulRouteMessage:
+    try:
+        message = AddRouteMessage(client_id, route)
+        response = requests.post(url=url + "/add_route", json=message.to_json())
+
+        if response.status_code == 200:
+            data = response.json()
+            return SuccesfulRouteMessage.from_json(data)
+
+    except Exception as e:
+        pass
+
+    return None
+
+
+def send_add_route_schedule_message(url, client_id: int, route_id: int, route: Route):
+    try:
+        message = EditRouteScheduleMessage(client_id, route_id, route)
+        response = requests.post(
+            url=url + "/add_route_schedule", json=message.to_json()
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return SuccesfulRouteMessage.from_json(data)
+
+    except Exception as e:
+        pass
+
+    return None
+
+
+def send_get_all_routes_message(url, client_id: int) -> ListOfRouteInfoMessage:
+    try:
+        response = requests.get(
+            url=url + "/get_all_routes",
+            json={
+                "client_id": f"{client_id}",
+            },
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return ListOfRouteInfoMessage.from_json(data)
+
+    except Exception as e:
+        pass
+
+    return None
+
+
+def send_get_route_info_message(
+    url, client_id: int, route_id: int
+) -> ListOfRouteInfoMessage:
+    try:
+        response = requests.get(
+            url=url + "/get_route_info",
+            json={"client_id": f"{client_id}", "route_id": f"{route_id}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return ListOfRouteInfoMessage.from_json(data)
+
+    except Exception as e:
+        pass
+
+    return None
