@@ -1,13 +1,17 @@
 import asyncio
 from .db_interface import DataBase
 from .taxi_route_info_api import TaxiRouteInfoApi
-from .route import Route
 from .time_schedule import Week, Day
 from .trip_info import parse_response
 from datetime import datetime, time, timedelta
+import logging
 
 
-class Core:
+class QueryCore:
+    """
+    Запускает основной event_loop модуля выполнения запросов
+    """
+
     def __init__(self) -> None:
         import json
 
@@ -25,6 +29,7 @@ class Core:
         """
         Загрузка расписания из БД
         """
+        logging.info(f"[QueryCore] Обновление расписания из БД")
         rows = self.db.request_schedule_table.get_all_schedule()
         self._request_schedule = Week()
         for row in rows:
@@ -41,40 +46,23 @@ class Core:
 
                     self._request_schedule.add(day=day)
 
-    async def add_route(self, client_id: int, route: Route) -> int:
+    def _parse_response(self, route_id, request_id, response):
         """
-        Интерфейс добавления маршрута с расписанием для пользователя
-        с сохранением всех данных в БД.
+        Парсинг данных от API taxi и распределение по соотв. таблицам
         """
-        # Сохранили в БД маршрут
-        route_id = self.db.routes_table.insert_data(route, client_id)
-        return route_id
+        if response.status_code == 200:
+            info_list = parse_response(response)
+            for obj in info_list:
+                if obj.is_available():
+                    self.db.available_trips_statistics_table.insert_data(
+                        request_id, route_id, obj
+                    )
+                else:
+                    self.db.unavailable_trips_statistics_table.insert_data(
+                        request_id, route_id, obj
+                    )
 
-    async def add_route_schedule(self, route_id, week: Week):
-        """
-        Интерфейс добавления расписания маршрута
-        с сохранением всех данных в БД.
-        """
-        for day in week.days.values():
-            for time in day.time_schedule:
-                day.time_schedule[time].append(route_id)
-
-        # Сохранили в БД расписание
-        self.db.request_schedule_table.insert_data(route_id, week)
-
-        self._request_schedule.add(day)
-
-    async def delete_route_schedule(self, client_id: int, route_id: int):
-        """
-        Проверяется что route_id принадлежит client_id.
-        Если да - удаляет расписание маршрута пользователя
-        с сохранением всех данных в БД.
-        """
-        routes = self.db.routes_table.get_all_routes(client_id=client_id)
-        if route_id in routes:
-            self.db.request_schedule_table.delete_data(route_id)
-
-    async def execute_request_from_api(self, route_id):
+    def _execute_request_from_api(self, route_id):
         """
         Выполнение запроса данных по маршруту
         с сохранением всех данных в БД.
@@ -85,27 +73,16 @@ class Core:
         response = self.taxi_api.request(route)
         request = self.taxi_api.params
 
-        self.db.debug_table.insert_data(
+        request_id = self.db.requests_table.insert_data(
             current_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             route_id,
             request,
             response.status_code,
             response.json(),
         )
+        self._parse_response(route_id, request_id, response)
 
-        if response.status_code == 200:
-            info_list = parse_response(response)
-            for obj in info_list:
-                if obj.is_available():
-                    self.db.available_trips_statistics_table.insert_data(
-                        current_datetime, route_id, obj
-                    )
-                else:
-                    self.db.unavailable_trips_statistics_table.insert_data(
-                        current_datetime, route_id, obj
-                    )
-
-    async def wait_next_task(self) -> list[int]:
+    async def _wait_next_task(self) -> list[int]:
         """
         Ожидание времени следующего запроса в расписании.
         Асинхронно ожидаем по минуте времени наступления события,
@@ -115,13 +92,19 @@ class Core:
         """
         while True:
             next_task_timepoint, ids = self._request_schedule.next_time_point()
-            delta = abs(next_task_timepoint - datetime.now())
-            if delta <= timedelta(minutes=1):
-                return ids
-            elif delta < timedelta(minutes=2):
-                await asyncio.sleep(delta.seconds)
+            if next_task_timepoint is not None:
+                delta = abs(next_task_timepoint - datetime.now())
+                logging.info(
+                    f"[QueryCore] Следующий запрос: {next_task_timepoint.isoformat()}"
+                )
+                if delta <= timedelta(minutes=1):
+                    await asyncio.sleep(delta.seconds + 1)
+                    return ids
+
             else:
-                await asyncio.sleep(60)
+                logging.info(f"[QueryCore] Следующий запрос не найден")
+
+            await asyncio.sleep(60)
 
             self._load_schedule_from_db()
 
@@ -132,6 +115,7 @@ class Core:
             выполняем запросы
         """
         while True:
-            ids = await self.wait_next_task()
+            ids = await self._wait_next_task()
             for route_id in ids:
-                self.execute_request_from_api(route_id)
+                logging.info(f"[QueryCore] Выполнение запроса для route_id={route_id}")
+                self._execute_request_from_api(route_id)

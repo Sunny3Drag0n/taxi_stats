@@ -46,7 +46,7 @@ class DataBase:
         )
 
         self.routes_table = RoutesTable(self._connection_pool)
-        self.debug_table = DebugTable(self._connection_pool)
+        self.requests_table = ApiRequestsTable(self._connection_pool)
         self.request_schedule_table = RequestScheduleTable(self._connection_pool)
         self.unavailable_trips_statistics_table = UnavailableTripsStatisticsTable(
             self._connection_pool

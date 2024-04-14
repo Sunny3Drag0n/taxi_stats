@@ -1,5 +1,5 @@
 from .route import Route, GeographicCoordinate
-from .time_schedule import Week, Day
+from .time_schedule import Week
 from .trip_info import TripInfo
 import json
 from typing import Optional
@@ -53,6 +53,11 @@ class RoutesTable(DbTable):
     Таблица содержащая маршруты поездок.
     Маршруты для каждого клиента свои.
     Маршрут: откуда, куда, пользовательский комментарий
+
+    functions:
+        insert_data(self, route: Route, client_id: int) -> int
+        get_route(self, route_id: int) -> Route
+        get_all_routes(self, client_id: Optional[int] = None) -> dict[int, Route]
     """
 
     table_name = "routes"
@@ -94,14 +99,11 @@ class RoutesTable(DbTable):
         """
         )
 
-    def get_route(self, route_id: int, client_id: Optional[int] = None) -> Route:
+    def get_route(self, route_id: int) -> Route:
         cursor = self.db_connection.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE route_id = {route_id};")
         row = cursor.fetchone()
         cursor.close()
-        if client_id is not None:
-            if row[1] != client_id:
-                return None
         return Route(
             from_coords=GeographicCoordinate(row[2], row[3]),
             dest_coords=GeographicCoordinate(row[4], row[5]),
@@ -129,13 +131,16 @@ class RoutesTable(DbTable):
         return routes
 
 
-class DebugTable(DbTable):
+class ApiRequestsTable(DbTable):
     """
     Таблица содержащая отладочные данные:
     время запроса, сам запрос, ответ
+
+    functions:
+        insert_data(self, datetime: str, route_id: int, request, response_code: int, response) -> int
     """
 
-    table_name = "api_debug"
+    table_name = "api_requests"
 
     def __init__(self, db_connection_pool):
         DbTable.__init__(self, db_connection_pool)
@@ -157,7 +162,7 @@ class DebugTable(DbTable):
         cursor.close()
 
     def insert_data(
-        self, datetime, route_id: int, request, response_code: int, response
+        self, datetime: str, route_id: int, request, response_code: int, response
     ) -> int:
         return self.insert(
             f"""
@@ -182,6 +187,12 @@ class RequestScheduleTable(DbTable):
     """
     Таблица содержащая расписание запросов.
     Расписание - мапинг вида {'день недели': ['время1', 'время2']}
+
+    functions:
+        insert_data(self, route_id: int, schedule: Week) -> int
+        delete_data(self, route_id: int)
+        get_route_schedule(self, route_id) -> list
+        get_all_schedule(self) -> list
     """
 
     table_name = "request_schedule"
@@ -195,7 +206,7 @@ class RequestScheduleTable(DbTable):
             f"""
             CREATE TABLE {self.table_name} (
                 id SERIAL PRIMARY KEY,                      -- ID расписания 
-                route_id INT REFERENCES routes(route_id),
+                route_id INT REFERENCES {RoutesTable.table_name}(route_id),
                 day_time_mapping JSONB                      -- расписание запросов в виде JSON соответствия 
             );
         """,
@@ -242,6 +253,10 @@ class UnavailableTripsStatisticsTable(DbTable):
     """
     Таблица с недоступными поездками.
     Информация: когда, какой класс, по какому маршруту
+
+    functions:
+        insert_data(self, request_id : int, route_id : int, info: TripInfo)
+        ??? get_route_statistics(self, route_id, day_name: str) -> list
     """
 
     table_name = "statistics_unavailable"
@@ -254,30 +269,29 @@ class UnavailableTripsStatisticsTable(DbTable):
             self.table_name,
             f"""
             CREATE TABLE {self.table_name} (
-                id SERIAL PRIMARY KEY,                      -- ID запроса
-                route_id INT REFERENCES routes(route_id),
-                api_request_id INT REFERENCES api_debug(id),
-                datetime TIMESTAMP,							-- Дата запроса
+                id SERIAL PRIMARY KEY,
+                request_id INT REFERENCES {ApiRequestsTable.table_name}(id),
+                route_id INT REFERENCES {RoutesTable.table_name}(route_id),
                 trip_class VARCHAR(50)                      -- Класс поездки
             );
         """,
         )
         cursor.close()
 
-    def insert_data(self, datetime, route_id, info: TripInfo):
+    def insert_data(self, request_id: int, route_id: int, info: TripInfo):
         if info.is_available():
             raise Exception(f"TripInfo is available")
 
-        self.execute(
+        return self.execute(
             f"""
             INSERT INTO {self.table_name} (
-                datetime, 
-                route_id, 
+                request_id
+                route_id,
                 trip_class
             ) VALUES (
-                '{datetime}', 
-                {route_id}, 
-                '{info.class_level()}'
+                {request_id},
+                {route_id},
+                '{info.class_text()}'
             );
         """
         )
@@ -301,6 +315,10 @@ class AvailableTripsStatisticsTable(DbTable):
     """
     Таблица с доступными поездками.
     Цена, время поездки, класс поездки, время ожидания
+
+    functions:
+        insert_data(self, datetime, route_id, info: TripInfo) -> int
+        ??? get_route_statistics(self, route_id, day_name: str) -> list
     """
 
     table_name = "statistics_available"
@@ -313,10 +331,9 @@ class AvailableTripsStatisticsTable(DbTable):
             self.table_name,
             f"""
             CREATE TABLE {self.table_name} (
-                id SERIAL PRIMARY KEY,                      -- ID запроса
-                route_id INT REFERENCES routes(route_id),
-                api_request_id INT REFERENCES api_debug(id),
-                datetime TIMESTAMP,							-- Дата запроса
+                id SERIAL PRIMARY KEY,
+                request_id INT REFERENCES {ApiRequestsTable.table_name}(id),
+                route_id INT REFERENCES {RoutesTable.table_name}(route_id),
                 trip_class VARCHAR(50),                     -- Класс поездки
                 travel_time INTERVAL,                       -- Время поездки
                 wait_time INTERVAL,                         -- Время ожидания
@@ -326,25 +343,25 @@ class AvailableTripsStatisticsTable(DbTable):
         )
         cursor.close()
 
-    def insert_data(self, datetime, route_id, info: TripInfo):
+    def insert_data(self, request_id: int, route_id: int, info: TripInfo):
         if not info.is_available():
             raise Exception(f"TripInfo is unavailable")
 
-        self.execute(
+        return self.execute(
             f"""
             INSERT INTO {self.table_name} (
-                datetime, 
-                route_id, 
+                request_id,
+                route_id,
                 travel_time, 
                 wait_time, 
                 trip_class, 
                 price
             ) VALUES (
-                '{datetime}', 
-                {route_id}, 
+                {request_id},
+                {route_id},
                 INTERVAL '{info.travel_time()} seconds', 
                 INTERVAL '{info.waiting_time()} seconds', 
-                '{info.class_level()}', 
+                '{info.class_text()}',
                 {info.price()}
             );
         """
