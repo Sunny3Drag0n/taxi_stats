@@ -12,11 +12,30 @@ class Day:
         self.name = name
         self.time_schedule: dict[time, list[int]] = {}
 
-    def add_time(self, time: time):
+    def __eq__(self, other: "Day") -> bool:
+        if self.name != other.name or len(self.time_schedule) != len(
+            other.time_schedule
+        ):
+            return False
+
+        for t, ids in self.time_schedule.items():
+            if t in other.time_schedule:
+                if len(ids) == len(other.time_schedule[t]):
+                    for id in ids:
+                        if id not in other.time_schedule[t]:
+                            return False
+                else:
+                    return False
+            else:
+                return False
+
+        return True
+
+    def add_time(self, time_point: time):
         """
         Интерфейс заполнения расписания
         """
-        self.time_schedule.setdefault(time, [])
+        self.time_schedule.setdefault(time_point, [])
 
     def add_to_schedule(self, id: int, times: list[time]):
         """
@@ -30,8 +49,10 @@ class Day:
         Интерфейс удаления элементов
         """
         for t in times:
-            if t in self.time_schedule and id in self.time_schedule[t]:
-                self.time_schedule[t].remove(id)
+            if t in self.time_schedule:
+                if id in self.time_schedule[t]:
+                    self.time_schedule[t].remove(id)
+
                 if len(self.time_schedule[t]) == 0:
                     del self.time_schedule[t]
 
@@ -39,6 +60,9 @@ class Day:
         """
         return Day - совмещенное расписание
         """
+        if other_day.name != self.name:
+            raise Exception(f"cannot merge {self.name} with {other_day.name}")
+
         merged_day = Day(self.name)
 
         for time, ids in self.time_schedule.items():
@@ -89,12 +113,26 @@ class Week:
     ]
 
     def __init__(self) -> None:
-        self.days: dict[str, Day] = {
-            day_name: Day(day_name) for day_name in Week.days_names
-        }
+        self.days: dict[str, Day] = {}
+
+    def __eq__(self, other: "Week") -> bool:
+        if len(self.days) != len(other.days):
+            return False
+
+        for day_name, day in self.days.items():
+            if day_name not in other.days:
+                return False
+
+            if day != other.days[day_name]:
+                return False
+
+        return True
 
     def add(self, day: Day):
-        self.days[day.name] = self.days[day.name].merge(day)
+        if day.name in self.days:
+            self.days[day.name] = self.days[day.name].merge(day)
+        else:
+            self.days[day.name] = day
 
     def get_mapping(self) -> dict[str, list[str]]:
         """
