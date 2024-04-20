@@ -110,6 +110,14 @@ class RoutesTable(DbTable):
             comment=row[6],
         )
 
+    def delete_data(self, client_id: int, route_id: int):
+        return self.execute(
+            f"""
+            DELETE FROM {self.table_name}
+            WHERE route_id = {route_id} AND client_id = {client_id};
+        """
+        )
+
     def get_all_routes(self, client_id: Optional[int] = None) -> dict[int, Route]:
         cursor = self.db_connection.cursor()
         if client_id is None:

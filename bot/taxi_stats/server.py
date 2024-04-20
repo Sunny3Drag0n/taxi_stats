@@ -136,7 +136,7 @@ class SuccesfulRouteMessage:
         }
 
 
-class Server:
+class ServerHandlers:
     def __init__(self) -> None:
         self.db = DataBase()
 
@@ -144,39 +144,13 @@ class Server:
         routes = self.db.routes_table.get_all_routes(client_id=client_id)
         return route_id in routes
 
-    def _add_route(self, client_id: int, route: Route) -> int:
-        """
-        Интерфейс добавления маршрута с расписанием для пользователя
-        """
-        route_id = self.db.routes_table.insert_data(route, client_id)
-        return route_id
-
-    def _add_route_schedule(self, route_id: int, week: Week):
-        """
-        Интерфейс добавления расписания маршрута
-        """
-        self.db.request_schedule_table.insert_data(route_id, week)
-
-    def _delete_route_schedule(self, route_id: int):
-        """
-        Удаляет расписание маршрута.
-        """
-        self.db.request_schedule_table.delete_data(route_id)
-
-    def run(self):
-        app = web.Application()
-        app.router.add_post("/add_route", self.add_route)
-        app.router.add_post("/add_route_schedule", self.add_route_schedule)
-        app.router.add_get("/get_all_routes", self.get_all_routes)
-        app.router.add_get("/get_route_info", self.get_route_info)
-        app.router.add_delete("/delete_route_schedule", self.delete_route_schedule)
-        web.run_app(app=app, host="localhost", port=13337)
-
     async def add_route(self, request):
         data = await request.json()
         try:
             route_message = AddRouteMessage.from_json(data=data)
-            route_id = self._add_route(route_message.client_id, route_message.route)
+            route_id = self.db.routes_table.insert_data(
+                client_id=route_message.client_id, route=route_message.route
+            )
             return web.json_response(
                 status=200,
                 data=SuccesfulRouteMessage(route_message.client_id, route_id).to_json(),
@@ -190,7 +164,7 @@ class Server:
         try:
             message = EditRouteScheduleMessage.from_json(data=data)
             if self._has_access(message.client_id, message.route_id):
-                self._add_route_schedule(
+                self.db.request_schedule_table.insert_data(
                     route_id=message.route_id, week=message.schedule
                 )
                 return web.json_response(
@@ -205,13 +179,30 @@ class Server:
         except Exception as e:
             return web.json_response(status=400)
 
+    async def delete_route(self, request):
+        data = await request.json()
+        try:
+            client_id = data.get("client_id")
+            route_id = data.get("route_id")
+            if self._has_access(client_id, route_id):
+                self.db.routes_table.delete_data(client_id=client_id, route_id=route_id)
+                return web.json_response(
+                    status=200,
+                    data=SuccesfulRouteMessage(client_id, route_id).to_json(),
+                )
+
+            return web.json_response(status=401, data={"message": "access denied"})
+
+        except Exception as e:
+            return web.json_response(status=404)
+
     async def delete_route_schedule(self, request):
         data = await request.json()
         try:
             client_id = data.get("client_id")
             route_id = data.get("route_id")
             if self._has_access(client_id, route_id):
-                self._delete_route_schedule(route_id=route_id)
+                self.db.request_schedule_table.delete_data(route_id=route_id)
                 return web.json_response(
                     status=200,
                     data=SuccesfulRouteMessage(client_id, route_id).to_json(),
@@ -257,6 +248,21 @@ class Server:
 
         finally:
             return web.json_response(status=404)
+
+
+class Server(ServerHandlers):
+    def __init__(self) -> None:
+        ServerHandlers.__init__(self)
+
+    def run(self):
+        app = web.Application()
+        app.router.add_post("/add_route", self.add_route)
+        app.router.add_post("/add_route_schedule", self.add_route_schedule)
+        app.router.add_get("/get_all_routes", self.get_all_routes)
+        app.router.add_get("/get_route_info", self.get_route_info)
+        app.router.add_delete("/delete_route_schedule", self.delete_route_schedule)
+        app.router.add_delete("/delete_route", self.delete_route)
+        web.run_app(app=app, host="localhost", port=13337)
 
 
 def send_add_route_message(url, client_id: int, route: Route) -> SuccesfulRouteMessage:
@@ -322,6 +328,44 @@ def send_get_route_info_message(
         if response.status_code == 200:
             data = response.json()
             return ListOfRouteInfoMessage.from_json(data)
+
+    except Exception as e:
+        pass
+
+    return None
+
+
+def send_delete_route_schedule_message(
+    url, client_id: int, route_id: int
+) -> SuccesfulRouteMessage:
+    try:
+        response = requests.delete(
+            url=url + "/delete_route_schedule",
+            json={"client_id": f"{client_id}", "route_id": f"{route_id}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return SuccesfulRouteMessage.from_json(data)
+
+    except Exception as e:
+        pass
+
+    return None
+
+
+def send_delete_route_message(
+    url, client_id: int, route_id: int
+) -> SuccesfulRouteMessage:
+    try:
+        response = requests.delete(
+            url=url + "/delete_route",
+            json={"client_id": f"{client_id}", "route_id": f"{route_id}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return SuccesfulRouteMessage.from_json(data)
 
     except Exception as e:
         pass
