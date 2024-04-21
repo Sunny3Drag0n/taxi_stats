@@ -262,7 +262,7 @@ class RequestScheduleTable(DbTable):
 
         return week
 
-    def get_route_schedule(self, route_id) -> Week:
+    def get_route_schedule(self, route_id: int) -> Week:
         cursor = self.db_connection.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE route_id = {route_id};")
         rows = cursor.fetchall()

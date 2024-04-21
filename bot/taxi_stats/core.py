@@ -12,7 +12,7 @@ def benchmark(func):
         start = datetime.now()
         ret = func(*args, **kwargs)
         finish = datetime.now()
-        logging.debug(f"Elapsed of {func}: {finish - start}")
+        logging.debug(f"Elapsed of {func.__name__}: {finish - start}")
         return ret
 
     return wrapper

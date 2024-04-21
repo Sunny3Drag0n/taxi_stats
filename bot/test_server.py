@@ -1,20 +1,18 @@
 from taxi_stats.server import (
-    AddRouteMessage,
-    RouteInfoMessage,
-    ListOfRouteInfoMessage,
-    EditRouteScheduleMessage,
     send_add_route_message,
     send_add_route_schedule_message,
     send_get_all_routes_message,
     send_get_route_info_message,
+    send_delete_route_schedule_message,
+    send_delete_route_message,
 )
 from taxi_stats.route import Route, GeographicCoordinate
 from taxi_stats.time_schedule import Day, Week, time
 from pprint import pprint
-import json
+import json, logging, sys
 
 url = "http://localhost:13337"
-client_id = 0
+client_id = 9999
 
 
 def load_from_file() -> list[Route]:
@@ -33,6 +31,11 @@ def load_from_file() -> list[Route]:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        level=logging.DEBUG,
+        stream=sys.stdout,
+    )
     src_routes: dict[int, Route] = {}
     # Добавление всех маршрутов из файла (мои тестовые координаты)
     file_routes = load_from_file()
@@ -61,6 +64,7 @@ if __name__ == "__main__":
     # Проверяю все добавленные маршруты
     response = send_get_all_routes_message(url, client_id)
     assert response is not None
+    assert response.client_id == client_id
     for route_msg in response.routes:
         assert route_msg.route_id in src_routes
         assert route_msg.route == src_routes[route_msg.route_id]
@@ -68,7 +72,17 @@ if __name__ == "__main__":
     for id, route in src_routes.items():
         response = send_get_route_info_message(url, client_id, id)
         assert response is not None
-        assert len(response.routes) == 1
-        route_msg = response.routes[0]
-        assert route_msg.route_id in src_routes
-        assert route_msg.route == src_routes[route_msg.route_id]
+        assert response.schedule == week
+
+        # Удаляю расписание маршрута, т.к. без этого не удалить маршрут
+        response = send_delete_route_schedule_message(url, client_id, id)
+        assert response.client_id == client_id and response.route_id == id
+        response = send_get_route_info_message(url, client_id, id)
+        assert response is not None
+        assert len(response.schedule.days) == 0
+        # Удаляю эти маршруты т.к. проверил. Для след запуска теста
+        response = send_delete_route_message(url, client_id, id)
+        assert response.client_id == client_id and response.route_id == id
+
+    response = send_get_all_routes_message(url, client_id)
+    assert response is None
