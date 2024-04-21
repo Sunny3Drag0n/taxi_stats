@@ -172,8 +172,8 @@ def test_week_time_search():
 
     monday = Day(Week.days_names[1])
     monday.add_to_schedule(234, [time(7, 0), time(12, 0), time(17, 30)])
-
     week.add(monday)
+
     # вторник
     t, ids = week.next_time_point(
         datetime(year=2024, month=4, day=16, hour=11, minute=50)

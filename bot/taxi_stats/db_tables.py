@@ -1,8 +1,9 @@
 from .route import Route, GeographicCoordinate
-from .time_schedule import Week
+from .time_schedule import Week, Day
 from .trip_info import TripInfo
 import json
 from typing import Optional
+from datetime import time
 
 
 class DbTable:
@@ -56,6 +57,7 @@ class RoutesTable(DbTable):
 
     functions:
         insert_data(self, route: Route, client_id: int) -> int
+        def delete_data(self, client_id: int, route_id: int)
         get_route(self, route_id: int) -> Route
         get_all_routes(self, client_id: Optional[int] = None) -> dict[int, Route]
     """
@@ -242,19 +244,37 @@ class RequestScheduleTable(DbTable):
         """
         )
 
-    def get_route_schedule(self, route_id) -> list:
+    def parse_get_response(self, rows) -> Week:
+        week = Week()
+        for row in rows:
+            id = row[0]
+            route_id = row[1]
+            schedule = row[2]
+            for day_name, time_list in schedule.items():
+                if len(time_list) > 0:
+                    day = Day(day_name)
+                    for time_str in time_list:
+                        key = time.fromisoformat(time_str)
+                        day.add_time(key)
+                        day.time_schedule[key].append(route_id)
+
+                    week.add(day=day)
+
+        return week
+
+    def get_route_schedule(self, route_id) -> Week:
         cursor = self.db_connection.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE route_id = {route_id};")
         rows = cursor.fetchall()
         cursor.close()
-        return rows
+        return self.parse_get_response(rows)
 
-    def get_all_schedule(self) -> list:
+    def get_all_schedule(self) -> Week:
         cursor = self.db_connection.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name};")
         rows = cursor.fetchall()
         cursor.close()
-        return rows
+        return self.parse_get_response(rows)
 
 
 class UnavailableTripsStatisticsTable(DbTable):

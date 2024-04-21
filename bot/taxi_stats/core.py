@@ -30,21 +30,7 @@ class QueryCore:
         Загрузка расписания из БД
         """
         logging.info(f"[QueryCore] Обновление расписания из БД")
-        rows = self.db.request_schedule_table.get_all_schedule()
-        self._request_schedule = Week()
-        for row in rows:
-            id = row[0]
-            route_id = row[1]
-            schedule = row[2]
-            for day_name, time_list in schedule.items():
-                if len(time_list) > 0:
-                    day = Day(day_name)
-                    for time_str in time_list:
-                        key = time.fromisoformat(time_str)
-                        day.add_time(key)
-                        day.time_schedule[key].append(route_id)
-
-                    self._request_schedule.add(day=day)
+        self._request_schedule = self.db.request_schedule_table.get_all_schedule()
 
     def _parse_response(self, route_id, request_id, response):
         """
