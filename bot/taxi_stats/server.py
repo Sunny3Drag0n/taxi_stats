@@ -254,7 +254,7 @@ class Server(ServerHandlers):
     def __init__(self) -> None:
         ServerHandlers.__init__(self)
 
-    def run(self):
+    def run(self, host, port):
         app = web.Application()
         app.router.add_post("/add_route", self.add_route)
         app.router.add_post("/add_route_schedule", self.add_route_schedule)
@@ -262,7 +262,7 @@ class Server(ServerHandlers):
         app.router.add_get("/get_route_info", self.get_route_info)
         app.router.add_delete("/delete_route_schedule", self.delete_route_schedule)
         app.router.add_delete("/delete_route", self.delete_route)
-        web.run_app(app=app, host="localhost", port=13337)
+        web.run_app(app=app, host=host, port=port)
 
 
 def send_add_route_message(url, client_id: int, route: Route) -> SuccesfulRouteMessage:
@@ -280,9 +280,9 @@ def send_add_route_message(url, client_id: int, route: Route) -> SuccesfulRouteM
     return None
 
 
-def send_add_route_schedule_message(url, client_id: int, route_id: int, route: Route):
+def send_add_route_schedule_message(url, client_id: int, route_id: int, schedule: Week):
     try:
-        message = EditRouteScheduleMessage(client_id, route_id, route)
+        message = EditRouteScheduleMessage(client_id, route_id, schedule)
         response = requests.post(
             url=url + "/add_route_schedule", json=message.to_json()
         )
