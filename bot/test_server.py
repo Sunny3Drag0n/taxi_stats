@@ -1,4 +1,4 @@
-from taxi_stats.server import (
+from taxi_stats.rest_messages import (
     send_add_route_message,
     send_add_route_schedule_message,
     send_get_all_routes_message,
@@ -8,7 +8,6 @@ from taxi_stats.server import (
 )
 from taxi_stats.route import Route, GeographicCoordinate
 from taxi_stats.time_schedule import Day, Week, time
-from pprint import pprint
 import json, logging, sys
 
 url = "http://localhost:13337"

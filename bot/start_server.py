@@ -1,4 +1,4 @@
-from taxi_stats.server import Server
+from taxi_stats.rest_server import Server
 import logging, sys
 
 
