@@ -165,7 +165,49 @@ def test_week_serialization():
 
 
 def test_week_time_search():
-    pass
+    week = Week()
+    sunday = Day(Week.days_names[0])
+    sunday.add_to_schedule(123, [time(6, 0), time(12, 10), time(11, 30)])
+    week.add(sunday)
+
+    monday = Day(Week.days_names[1])
+    monday.add_to_schedule(234, [time(7, 0), time(12, 0), time(17, 30)])
+
+    week.add(monday)
+    # вторник
+    t, ids = week.next_time_point(
+        datetime(year=2024, month=4, day=16, hour=11, minute=50)
+    )
+    assert t == datetime(year=2024, month=4, day=21, hour=6, minute=0)
+    assert len(ids) == 1
+    # Пн
+    t, ids = week.next_time_point(
+        datetime(year=2024, month=4, day=15, hour=8, minute=0)
+    )
+    assert t == datetime(year=2024, month=4, day=15, hour=12, minute=0)
+    assert len(ids) == 1
+
+    # Вс - Пн
+    t, ids = week.next_time_point(
+        datetime(year=2024, month=4, day=14, hour=17, minute=50)
+    )
+    assert t == datetime(year=2024, month=4, day=15, hour=7, minute=0)
+    assert len(ids) == 1
+
+    week = Week()
+    # Пусто
+    t, ids = week.next_time_point(
+        datetime(year=2024, month=4, day=14, hour=17, minute=50)
+    )
+    assert t == None
+    assert len(ids) == 0
+    # В течении недели нет новых эвентов
+    week.add(sunday)
+    t, ids = week.next_time_point(
+        datetime(year=2024, month=4, day=14, hour=17, minute=50)
+    )
+    assert t == None
+    assert len(ids) == 0
 
 
 if __name__ == "__main__":

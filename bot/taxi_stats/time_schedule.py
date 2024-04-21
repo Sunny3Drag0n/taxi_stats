@@ -170,27 +170,29 @@ class Week:
         while next_point is None and days_counter < 7:
             day_name = from_datetime.strftime("%A")
 
-            next_time, values = self.days[day_name].next_time_point(from_datetime)
-            if next_time:
-                next_point = datetime(
-                    year=from_datetime.year,
-                    month=from_datetime.month,
-                    day=from_datetime.day,
-                    hour=next_time.hour,
-                    minute=next_time.minute,
-                    second=next_time.second,
-                )
-            else:
-                from_datetime += timedelta(days=1)
-                from_datetime = datetime(
-                    year=from_datetime.year,
-                    month=from_datetime.month,
-                    day=from_datetime.day,
-                    hour=0,
-                    minute=0,
-                    second=0,
-                )
-                days_counter += 1
+            if day_name in self.days:
+                next_time, values = self.days[day_name].next_time_point(from_datetime)
+                if next_time:
+                    next_point = datetime(
+                        year=from_datetime.year,
+                        month=from_datetime.month,
+                        day=from_datetime.day,
+                        hour=next_time.hour,
+                        minute=next_time.minute,
+                        second=next_time.second,
+                    )
+                    break
+
+            from_datetime += timedelta(days=1)
+            from_datetime = datetime(
+                year=from_datetime.year,
+                month=from_datetime.month,
+                day=from_datetime.day,
+                hour=0,
+                minute=0,
+                second=0,
+            )
+            days_counter += 1
 
         return next_point, values
 
