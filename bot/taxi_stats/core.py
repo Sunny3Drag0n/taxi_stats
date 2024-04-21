@@ -7,6 +7,17 @@ from datetime import datetime, time, timedelta
 import logging
 
 
+def benchmark(func):
+    def wrapper(*args, **kwargs):
+        start = datetime.now()
+        ret = func(*args, **kwargs)
+        finish = datetime.now()
+        logging.debug(f"Elapsed of {func}: {finish - start}")
+        return ret
+
+    return wrapper
+
+
 class QueryCore:
     """
     Запускает основной event_loop модуля выполнения запросов
@@ -25,6 +36,7 @@ class QueryCore:
 
         self._load_schedule_from_db()
 
+    @benchmark
     def _load_schedule_from_db(self):
         """
         Загрузка расписания из БД
@@ -32,6 +44,7 @@ class QueryCore:
         logging.info(f"[QueryCore] Обновление расписания из БД")
         self._request_schedule = self.db.request_schedule_table.get_all_schedule()
 
+    @benchmark
     def _parse_response(self, route_id, request_id, response):
         """
         Парсинг данных от API taxi и распределение по соотв. таблицам
@@ -48,6 +61,7 @@ class QueryCore:
                         request_id, route_id, obj
                     )
 
+    @benchmark
     def _execute_request_from_api(self, route_id):
         """
         Выполнение запроса данных по маршруту
@@ -68,6 +82,7 @@ class QueryCore:
         )
         self._parse_response(route_id, request_id, response)
 
+    @benchmark
     async def _wait_next_task(self) -> list[int]:
         """
         Ожидание времени следующего запроса в расписании.
