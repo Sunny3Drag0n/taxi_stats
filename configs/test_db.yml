@@ -1,0 +1,6 @@
+postgres:
+  dbname: test_taxi_routing_db
+  user: postgres
+  password: useruser
+  host: localhost
+  port: 5432

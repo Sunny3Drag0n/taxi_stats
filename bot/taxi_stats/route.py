@@ -10,6 +10,9 @@ class GeographicCoordinate:
         # Долгота
         self.longitude = longitude
 
+    def __eq__(self, other: "GeographicCoordinate") -> bool:
+        return self.latitude == other.latitude and self.longitude == other.longitude
+
 
 class Route:
     """
@@ -26,3 +29,9 @@ class Route:
         self.from_coords = from_coords
         self.dest_coords = dest_coords
         self.comment = comment
+
+    def __eq__(self, other: "Route") -> bool:
+        return (
+            self.from_coords == other.from_coords
+            and self.dest_coords == other.dest_coords
+        )
