@@ -1,5 +1,5 @@
 from taxi_stats.rest_server import Server
-import logging, sys
+import logging, sys, yaml
 
 
 if __name__ == "__main__":
@@ -8,5 +8,10 @@ if __name__ == "__main__":
         level=logging.DEBUG,
         stream=sys.stdout,
     )
+    config_file = "configs/server.yml"
+
+    with open(config_file, "r") as file:
+        config = yaml.safe_load(file)
+
     server = Server()
-    server.run(host="localhost", port=13337)
+    server.run(host=config["rest_server"]["host"], port=config["rest_server"]["port"])

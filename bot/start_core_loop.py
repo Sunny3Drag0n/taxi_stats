@@ -1,6 +1,6 @@
 import asyncio
 from taxi_stats.core import QueryCore
-import logging, sys
+import logging, sys, json
 
 
 def load_from_file(core: QueryCore):
@@ -23,7 +23,11 @@ def load_from_file(core: QueryCore):
 
 
 async def start():
-    core = QueryCore()
+    config_file = "configs/yandex_taxi_api.json"
+    with open(config_file, "r", encoding="utf-8") as file:
+        config = json.load(file)
+
+    core = QueryCore(CLID=config.get("CLID"), APIKEY=config.get("APIKEY"))
     # load_from_file(core)
     await core.run_event_loop()
 

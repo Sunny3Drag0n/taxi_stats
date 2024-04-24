@@ -1,0 +1,6 @@
+postgres:
+  dbname: taxi_routing_api_db
+  user: postgres
+  password: useruser
+  host: localhost
+  port: 5432

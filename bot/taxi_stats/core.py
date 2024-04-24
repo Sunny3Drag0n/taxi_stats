@@ -23,16 +23,9 @@ class QueryCore:
     Запускает основной event_loop модуля выполнения запросов
     """
 
-    def __init__(self) -> None:
-        import json
-
-        with open("configs/yandex_taxi_api.json", "r", encoding="utf-8") as config_file:
-            config = json.load(config_file)
-
+    def __init__(self, CLID: str, APIKEY: str) -> None:
         self.db = DataBase()
-        self.taxi_api = TaxiRouteInfoApi(
-            CLID=config.get("CLID"), APIKEY=config.get("APIKEY")
-        )
+        self.taxi_api = TaxiRouteInfoApi(CLID=CLID, APIKEY=APIKEY)
 
         self._load_schedule_from_db()
 
